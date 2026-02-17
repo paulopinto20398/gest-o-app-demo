@@ -82,26 +82,35 @@ export const useBeneficiaries = () => {
   useEffect(() => {
     const stored = localStorage.getItem("beneficiaries");
 
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        const normalized = Array.isArray(parsed) ? parsed.map(normalizeBeneficiary) : [];
-        setBeneficiaries(normalized);
-        localStorage.setItem("beneficiaries", JSON.stringify(normalized));
-      } catch (e) {
-        console.error("Failed to parse beneficiaries", e);
-        const normalizedMocks = MOCK_BENEFICIARIES.map(normalizeBeneficiary);
-        setBeneficiaries(normalizedMocks);
-        localStorage.setItem("beneficiaries", JSON.stringify(normalizedMocks));
-      }
-    } else {
+    const seed = () => {
       const normalizedMocks = MOCK_BENEFICIARIES.map(normalizeBeneficiary);
       setBeneficiaries(normalizedMocks);
       localStorage.setItem("beneficiaries", JSON.stringify(normalizedMocks));
+    };
+
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+
+        // ✅ Se não for array OU for array vazio -> reseed
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          seed();
+        } else {
+          const normalized = parsed.map(normalizeBeneficiary);
+          setBeneficiaries(normalized);
+          localStorage.setItem("beneficiaries", JSON.stringify(normalized));
+        }
+      } catch (e) {
+        console.error("Failed to parse beneficiaries", e);
+        seed();
+      }
+    } else {
+      seed();
     }
 
     setLoading(false);
   }, []);
+
 
   const addBeneficiary = (beneficiary: Beneficiary) => {
     const newData = [...beneficiaries, normalizeBeneficiary(beneficiary)];
