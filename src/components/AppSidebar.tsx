@@ -11,20 +11,24 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { LayoutDashboard, Users, Settings, LogOut } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const items = [
     {
       title: "Dashboard",
-      url: "/",
+      url: "/manager",
       icon: LayoutDashboard,
     },
     {
       title: "Beneficiários",
-      url: "/beneficiaries",
+      url: "/manager/beneficiaries",
       icon: Users,
     },
     {
@@ -33,6 +37,11 @@ export function AppSidebar() {
       icon: Settings,
     },
   ];
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <Sidebar>
@@ -50,10 +59,11 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={
-                      item.url === "/"
-                        ? location.pathname === "/"
+                      item.url === "/manager"
+                        ? location.pathname === "/manager"
                         : location.pathname.startsWith(item.url)
                     }
+
                   >
                     <NavLink to={item.url}>
                       <item.icon className="h-4 w-4" />
@@ -65,11 +75,15 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        
+
         <div className="mt-auto p-4 border-t">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton className="text-red-500 hover:text-red-600 hover:bg-red-50">
+              <SidebarMenuButton
+                onClick={handleLogout}
+                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+              >
+
                 <LogOut className="h-4 w-4" />
                 <span>Sair</span>
               </SidebarMenuButton>

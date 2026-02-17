@@ -2,19 +2,30 @@ export type UserRole = "cidadao" | "gestor";
 
 export type FieldStatus = "Em curso" | "Fechado" | "Não se aplica";
 
+export type ContactRequestStatus = "Em curso" | "Fechado";
+
+/**
+ * Pedido de contacto individual
+ */
 export interface ContactRequest {
-  type: string; // Telefónico, E-mail, Presencial
-  scheduledDate: string;
+  id: string;
+  type: string;            // Telefónico, E-mail, Presencial
+  scheduledDate: string;   // "YYYY-MM-DD"
   subject: string;
+  status: ContactRequestStatus;
+  createdAt: string;       // ISO obrigatório
+  closedAt?: string;       // ISO opcional
 }
 
+/**
+ * Beneficiário
+ */
 export interface Beneficiary {
   id: string;
   processNumber: string;
   photoUrl?: string;
   status: "active" | "archived" | "pending";
 
-  // Identificação
   personalInfo: {
     name: string;
     dateOfBirth: string;
@@ -30,12 +41,12 @@ export interface Beneficiary {
     email: string;
     householdSize: number;
     householdLinked?: string;
-    entityManager: string; // Entidade Gestora de Processo
-    managerName: string; // Técnico Gestor de Processo
+    entityManager: string;
+    managerName: string;
+    managerId: string;
     dataSharingAuthorized: boolean;
   };
 
-  // Documentação
   documents: {
     regularizationProcessType: string;
     processStartDate: string;
@@ -50,7 +61,6 @@ export interface Beneficiary {
     otherDocs: string[];
   };
 
-  // Integração - Saúde
   health: {
     usf: string;
     doctorName: string;
@@ -61,7 +71,6 @@ export interface Beneficiary {
     observations: string;
   };
 
-  // Integração - Habitação
   housing: {
     type: string;
     contractType: string;
@@ -71,7 +80,6 @@ export interface Beneficiary {
     observations: string;
   };
 
-  // Integração - PLA
   pla: {
     modality: string;
     institution: string;
@@ -82,7 +90,6 @@ export interface Beneficiary {
     observations: string;
   };
 
-  // Integração - Educação
   education: {
     startDate: string;
     institution: string;
@@ -92,7 +99,6 @@ export interface Beneficiary {
     performance?: string;
   };
 
-  // Integração - Formação
   training: {
     attending: boolean;
     institution?: string;
@@ -106,12 +112,11 @@ export interface Beneficiary {
     observations: string;
   };
 
-  // Integração - Emprego
   employment: {
     employed: boolean;
     contractType?: string;
     startDate?: string;
-    schedule?: string; // Horário
+    schedule?: string;
     profession?: string;
     location?: string;
     satisfaction?: string;
@@ -121,7 +126,6 @@ export interface Beneficiary {
     serviceIEFP?: string;
   };
 
-  // Apoios Sociais
   socialSupport: {
     hasSupport: boolean;
     supportTypes: string[];
@@ -132,13 +136,18 @@ export interface Beneficiary {
     technicianName?: string;
   };
 
-  // Pedido de Contacto (cidadão) - único (para este formulário)
-  contactRequests?: ContactRequest;
-  // Pedidos de Contacto AIMA (gestor)
-  contactRequestsAIMA?: ContactRequest;
+  /**
+   * ✅ LISTAS (não opcionais para evitar "possibly undefined")
+   */
+  contactRequests: ContactRequest[];
+  contactRequestsAIMA: ContactRequest[];
+  contactRequestsHistory: ContactRequest[];       // opcional manter
+  contactRequestsAIMAHistory: ContactRequest[];   // opcional manter
 }
 
-// Field configuration for rendering
+// ============================
+// Field configuration
+// ============================
 export type FieldType = "text" | "number" | "date" | "select" | "boolean" | "link" | "textarea";
 
 export interface FieldConfig {
@@ -147,13 +156,14 @@ export interface FieldConfig {
   section: string;
   fieldType: FieldType;
   options?: string[];
-  source: string; // Fonte de informação
+  source: string;
   editableByCidadao: boolean;
   editableByGestor: boolean;
-  requiresValidation?: boolean; // "Alteração realizada, validada pelo Gestor de Processo"
+  requiresValidation?: boolean;
 }
 
-// Section field definitions based on Excel
+// ✅ NOTA: removi a secção contactRequest porque contactRequests agora é ARRAY.
+// A tab Contacto deve usar UI própria (como fizemos no BeneficiaryDetail).
 export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
   identification: [
     { key: "processNumber", label: "ID Processo Plataforma", section: "root", fieldType: "text", source: "AIMA", editableByCidadao: false, editableByGestor: true },
@@ -173,8 +183,10 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "householdLinked", label: "Agregado Familiar associado", section: "personalInfo", fieldType: "link", source: "AIMA; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
     { key: "entityManager", label: "Entidade Gestora de Processo", section: "personalInfo", fieldType: "text", source: "AIMA", editableByCidadao: false, editableByGestor: true },
     { key: "managerName", label: "Técnico Gestor de Processo", section: "personalInfo", fieldType: "text", source: "AIMA; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
+    { key: "managerId", label: "ID Gestor", section: "personalInfo", fieldType: "text", source: "Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
     { key: "dataSharingAuthorized", label: "Autorização de partilha de dados", section: "personalInfo", fieldType: "boolean", source: "Próprio", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
   ],
+
   documentation: [
     { key: "regularizationProcessType", label: "Tipo de Processo Regularização", section: "documents", fieldType: "select", options: ["Visto Estudante", "Autorização de Residência", "Asilo", "Proteção Subsidiária", "Reagrupamento Familiar", "Outro"], source: "AIMA", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
     { key: "processStartDate", label: "Data de início do Processo", section: "documents", fieldType: "date", source: "AIMA", editableByCidadao: false, editableByGestor: true },
@@ -188,6 +200,7 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "nationalityRequest", label: "Pedido de Nacionalidade", section: "documents", fieldType: "boolean", source: "IRN", editableByCidadao: false, editableByGestor: true },
     { key: "otherDocs", label: "Outros documentos identificação", section: "documents", fieldType: "text", source: "Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
   ],
+
   health: [
     { key: "usf", label: "USF", section: "health", fieldType: "text", source: "DGS", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
     { key: "doctorName", label: "Médico Família", section: "health", fieldType: "text", source: "DGS", editableByCidadao: false, editableByGestor: true },
@@ -197,6 +210,7 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "vaccination", label: "Vacinação", section: "health", fieldType: "boolean", source: "DGS", editableByCidadao: false, editableByGestor: true },
     { key: "observations", label: "Observações saúde", section: "health", fieldType: "textarea", source: "DGS", editableByCidadao: false, editableByGestor: true },
   ],
+
   housing: [
     { key: "type", label: "Tipo de habitação", section: "housing", fieldType: "select", options: ["Quarto", "Apartamento", "Casa", "Alojamento Temporário", "Sem Abrigo", "Outro"], source: "Próprio; Entidade Gestora Processo", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
     { key: "contractType", label: "Tipo de contrato", section: "housing", fieldType: "select", options: ["Arrendamento", "Subarrendamento", "Cedência", "Sem Contrato", "Outro"], source: "Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
@@ -205,6 +219,7 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "lookingForAlternative", label: "Procura alternativa habitação", section: "housing", fieldType: "boolean", source: "Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
     { key: "observations", label: "Observações habitação", section: "housing", fieldType: "textarea", source: "Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
   ],
+
   pla: [
     { key: "modality", label: "Modalidade de PLA", section: "pla", fieldType: "select", options: ["Curso Online", "Presencial", "Misto", "Não frequenta"], source: "Próprio; Entidade Gestora Processo", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
     { key: "institution", label: "Entidade Formadora", section: "pla", fieldType: "text", source: "Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
@@ -214,6 +229,7 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "satisfaction", label: "Satisfação PLA", section: "pla", fieldType: "select", options: ["Muito Satisfeito", "Satisfeito", "Pouco Satisfeito", "Insatisfeito"], source: "Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
     { key: "observations", label: "Observações PLA", section: "pla", fieldType: "textarea", source: "Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
   ],
+
   education: [
     { key: "startDate", label: "Data início de frequência", section: "education", fieldType: "date", source: "DGE", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
     { key: "institution", label: "Estabelecimento de Ensino", section: "education", fieldType: "text", source: "DGE", editableByCidadao: false, editableByGestor: true },
@@ -222,6 +238,7 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "specialNeeds", label: "NEE", section: "education", fieldType: "boolean", source: "DGE", editableByCidadao: false, editableByGestor: true },
     { key: "performance", label: "Aproveitamento Escolar", section: "education", fieldType: "select", options: ["NA", "Bom", "Suficiente", "Insuficiente"], source: "DGE", editableByCidadao: false, editableByGestor: true },
   ],
+
   training: [
     { key: "attending", label: "Frequência", section: "training", fieldType: "boolean", source: "IEFP", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
     { key: "institution", label: "Entidade Formadora", section: "training", fieldType: "text", source: "IEFP", editableByCidadao: false, editableByGestor: true },
@@ -234,6 +251,7 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "previousTraining", label: "Formação anteriormente realizada", section: "training", fieldType: "text", source: "IEFP", editableByCidadao: false, editableByGestor: true },
     { key: "observations", label: "Observações formação", section: "training", fieldType: "textarea", source: "IEFP", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
   ],
+
   employment: [
     { key: "employed", label: "Empregado", section: "employment", fieldType: "boolean", source: "Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
     { key: "contractType", label: "Tipo de contrato", section: "employment", fieldType: "select", options: ["Sem termo", "A termo certo", "A termo incerto", "Prestação de serviços", "Outro"], source: "Próprio; Entidade Gestora Processo", editableByCidadao: true, editableByGestor: true },
@@ -247,6 +265,7 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "registeredIEFP", label: "Inscrito no IEFP", section: "employment", fieldType: "boolean", source: "IEFP", editableByCidadao: true, editableByGestor: true },
     { key: "serviceIEFP", label: "Serviço IEFP", section: "employment", fieldType: "text", source: "IEFP", editableByCidadao: true, editableByGestor: true },
   ],
+
   socialSupport: [
     { key: "hasSupport", label: "Apoios Sociais", section: "socialSupport", fieldType: "boolean", source: "ISS; Próprio; Entidade Gestora Processo", editableByCidadao: true, editableByGestor: true, requiresValidation: true },
     { key: "supportTypes", label: "Qual?", section: "socialSupport", fieldType: "text", source: "ISS; Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
@@ -256,14 +275,11 @@ export const SECTION_FIELDS: Record<string, FieldConfig[]> = {
     { key: "otherEntities", label: "Outras entidades sociais", section: "socialSupport", fieldType: "text", source: "ISS; Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
     { key: "technicianName", label: "Outras Técnicos/as sociais", section: "socialSupport", fieldType: "text", source: "ISS; Próprio; Entidade Gestora Processo", editableByCidadao: false, editableByGestor: true },
   ],
-  contactRequest: [
-    { key: "type", label: "Tipo de contacto", section: "contactRequests", fieldType: "select", options: ["Telefónico", "E-mail", "Presencial"], source: "Próprio", editableByCidadao: true, editableByGestor: true },
-    { key: "scheduledDate", label: "Data agendamento", section: "contactRequests", fieldType: "date", source: "Próprio", editableByCidadao: true, editableByGestor: true },
-    { key: "subject", label: "Assunto", section: "contactRequests", fieldType: "text", source: "Próprio", editableByCidadao: true, editableByGestor: true },
-  ],
 };
 
-// Mock Data
+// ============================
+// Mock Data (corrigido)
+// ============================
 export const MOCK_BENEFICIARIES: Beneficiary[] = [
   {
     id: "1",
@@ -285,6 +301,7 @@ export const MOCK_BENEFICIARIES: Beneficiary[] = [
       householdSize: 0,
       entityManager: "FOCUS Europa",
       managerName: "António Silva",
+      managerId: "G002",
       dataSharingAuthorized: true,
     },
     documents: {
@@ -351,10 +368,13 @@ export const MOCK_BENEFICIARIES: Beneficiary[] = [
       otherEntities: "SASNOVA",
       technicianName: "António Oliveira",
     },
-    contactRequests: { type: "", scheduledDate: "", subject: "" },
-    contactRequestsAIMA: { type: "", scheduledDate: "", subject: "" },
 
+    contactRequests: [],
+    contactRequestsAIMA: [],
+    contactRequestsHistory: [],
+    contactRequestsAIMAHistory: [],
   },
+
   {
     id: "2",
     processNumber: "123457",
@@ -375,6 +395,7 @@ export const MOCK_BENEFICIARIES: Beneficiary[] = [
       householdSize: 2,
       entityManager: "FOCUS Europa",
       managerName: "Maria Santos",
+      managerId: "G001",
       dataSharingAuthorized: true,
     },
     documents: {
@@ -449,5 +470,10 @@ export const MOCK_BENEFICIARIES: Beneficiary[] = [
       familyAllowance: false,
       foodBank: false,
     },
+
+    contactRequests: [],
+    contactRequestsAIMA: [],
+    contactRequestsHistory: [],
+    contactRequestsAIMAHistory: [],
   },
 ];

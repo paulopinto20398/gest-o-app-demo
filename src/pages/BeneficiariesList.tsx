@@ -1,5 +1,7 @@
 import { Layout } from "@/components/Layout";
 import { useBeneficiaries } from "@/hooks/useBeneficiaries";
+import { useAuth } from "@/hooks/useAuth";
+
 import {
   Table,
   TableBody,
@@ -25,17 +27,29 @@ import {
 
 
 const BeneficiariesList = () => {
-  const { beneficiaries } = useBeneficiaries(); // Hook que traz a lista de beneficiários
+  const { beneficiaries } = useBeneficiaries();
+  const { session } = useAuth();
+
+  const managerId = session?.role === "gestor" ? session.managerId : "";
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const managedBeneficiaries =
+    session?.role === "gestor"
+      ? beneficiaries.filter((b) => b.personalInfo.managerId === managerId)
+      : [];
+
+
   // Filtro de busca (opcional)
-  const filteredBeneficiaries = beneficiaries.filter((beneficiary) => {
+  const filteredBeneficiaries = managedBeneficiaries.filter((beneficiary) => {
     const matchesSearchTerm = beneficiary.personalInfo.name
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
+
     const matchesStatus =
       statusFilter === "all" || beneficiary.status === statusFilter;
+
     return matchesSearchTerm && matchesStatus;
   });
 
