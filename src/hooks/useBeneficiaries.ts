@@ -5,6 +5,13 @@ import type { ContactRequest, ContactRequestStatus } from "../types/beneficiary"
 
 type CreateContactRequestInput = Omit<ContactRequest, "id" | "status" | "createdAt" | "closedAt">;
 
+function uid() {
+  // randomUUID é ótimo quando existe; fallback garante compatibilidade
+  return (globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+}
+
+
 function asStatus(v: any): ContactRequestStatus {
   return v === "Fechado" ? "Fechado" : "Em curso";
 }
@@ -13,7 +20,7 @@ function normalizeContactRequest(cr: any): ContactRequest | null {
   if (!cr) return null;
 
   return {
-    id: cr.id ?? crypto.randomUUID(),
+    id: cr.id ?? uid(),
     type: cr.type ?? "",
     scheduledDate: cr.scheduledDate ?? "",
     subject: cr.subject ?? "",
@@ -127,7 +134,7 @@ export const useBeneficiaries = () => {
   const addContactRequest = (beneficiaryId: string, data: CreateContactRequestInput) => {
     const now = new Date().toISOString();
     const req: ContactRequest = {
-      id: crypto.randomUUID(),
+      id: uid(),
       ...data,
       status: "Em curso",
       createdAt: now,
@@ -176,7 +183,7 @@ export const useBeneficiaries = () => {
   const addContactRequestAIMA = (beneficiaryId: string, data: CreateContactRequestInput) => {
     const now = new Date().toISOString();
     const req: ContactRequest = {
-      id: crypto.randomUUID(),
+      id: uid(),
       ...data,
       status: "Em curso",
       createdAt: now,

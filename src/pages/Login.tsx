@@ -22,7 +22,8 @@ export default function Login() {
             return;
         }
 
-        const input = value.trim();
+        const input = value.trim().toUpperCase();
+
 
         // ===============================
         // BENEFICIÁRIO
@@ -60,8 +61,9 @@ export default function Login() {
 
             // Verifica se existe pelo menos um beneficiário atribuído a esse gestor
             const hasAssigned = beneficiaries.some(
-                (b) => b.personalInfo.managerId === input
+                (b) => (b.personalInfo.managerId ?? "").trim().toUpperCase() === input
             );
+
 
             if (!hasAssigned) {
                 toast.error("Gestor sem beneficiários atribuídos.");
@@ -69,9 +71,8 @@ export default function Login() {
             }
 
             loginGestor(input);
+            navigate("/manager/beneficiaries");
 
-            // Página do gestor
-            navigate(`/manager/beneficiaries`);
         }
     };
 
