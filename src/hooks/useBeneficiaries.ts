@@ -1,16 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "@/components/ui/sonner";
 import { Beneficiary, MOCK_BENEFICIARIES } from "../types/beneficiary";
 import type { ContactRequest, ContactRequestStatus } from "../types/beneficiary";
 
-type CreateContactRequestInput = Omit<ContactRequest, "id" | "status" | "createdAt" | "closedAt">;
+type CreateContactRequestInput = Omit<
+  ContactRequest,
+  "id" | "status" | "createdAt" | "closedAt"
+>;
+
+// ✅ chave versionada (fora das funções!)
+const BENEF_KEY = "beneficiaries_v2";
 
 function uid() {
   // randomUUID é ótimo quando existe; fallback garante compatibilidade
-  return (globalThis.crypto?.randomUUID?.() ??
-    `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 }
-
 
 function asStatus(v: any): ContactRequestStatus {
   return v === "Fechado" ? "Fechado" : "Em curso";
@@ -33,7 +40,9 @@ function normalizeContactRequest(cr: any): ContactRequest | null {
 function normalizeContactRequestArray(arr: any): ContactRequest[] {
   // suporta: array, objeto único, undefined
   if (Array.isArray(arr)) {
-    return arr.map(normalizeContactRequest).filter(Boolean) as ContactRequest[];
+    return arr
+      .map(normalizeContactRequest)
+      .filter(Boolean) as ContactRequest[];
   }
   const one = normalizeContactRequest(arr);
   return one ? [one] : [];
@@ -76,16 +85,16 @@ export const useBeneficiaries = () => {
   const saveBeneficiaries = (newData: Beneficiary[]) => {
     const normalized = newData.map(normalizeBeneficiary);
     setBeneficiaries(normalized);
-    localStorage.setItem("beneficiaries", JSON.stringify(normalized));
+    localStorage.setItem(BENEF_KEY, JSON.stringify(normalized));
   };
 
   useEffect(() => {
-    const stored = localStorage.getItem("beneficiaries");
+    const stored = localStorage.getItem(BENEF_KEY);
 
     const seed = () => {
       const normalizedMocks = MOCK_BENEFICIARIES.map(normalizeBeneficiary);
       setBeneficiaries(normalizedMocks);
-      localStorage.setItem("beneficiaries", JSON.stringify(normalizedMocks));
+      localStorage.setItem(BENEF_KEY, JSON.stringify(normalizedMocks));
     };
 
     if (stored) {
@@ -98,7 +107,7 @@ export const useBeneficiaries = () => {
         } else {
           const normalized = parsed.map(normalizeBeneficiary);
           setBeneficiaries(normalized);
-          localStorage.setItem("beneficiaries", JSON.stringify(normalized));
+          localStorage.setItem(BENEF_KEY, JSON.stringify(normalized));
         }
       } catch (e) {
         console.error("Failed to parse beneficiaries", e);
@@ -110,7 +119,6 @@ export const useBeneficiaries = () => {
 
     setLoading(false);
   }, []);
-
 
   const addBeneficiary = (beneficiary: Beneficiary) => {
     const newData = [...beneficiaries, normalizeBeneficiary(beneficiary)];
@@ -252,3 +260,4 @@ export const useBeneficiaries = () => {
     closeContactRequestAIMA,
   };
 };
+
