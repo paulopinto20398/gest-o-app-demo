@@ -4,6 +4,27 @@ export type FieldStatus = "Em curso" | "Fechado" | "Não se aplica";
 
 export type ContactRequestStatus = "Em curso" | "Fechado";
 
+export type DocStatus = "aprovado" | "pendente" | "rejeitado";
+
+export type DocKind = "cc" | "carta_conducao" | "passaporte" | "outro";
+
+
+
+/**
+ *Documento anexado
+ */
+export interface AttachedDoc {
+  id: string;
+  kind: DocKind;
+  label: string;
+  fileUrl: string;                 // URL em /public
+  uploadedBy: "cidadao" | "gestor";
+  status: DocStatus;
+  submittedAt: string;             // ISO
+  reviewedAt?: string;             // ISO
+  reviewedBy?: string;             // managerId
+  note?: string;                   // motivo rejeição
+}
 /**
  * Pedido de contacto individual
  */
@@ -59,6 +80,7 @@ export interface Beneficiary {
     drivingLicense: boolean;
     nationalityRequest: boolean;
     otherDocs: string[];
+    attachments: AttachedDoc[];
   };
 
   health: {
@@ -316,6 +338,40 @@ export const MOCK_BENEFICIARIES: Beneficiary[] = [
       drivingLicense: true,
       nationalityRequest: false,
       otherDocs: ["Passaporte"],
+      attachments: [
+        {
+          id: "doc-cc-001",
+          kind: "cc",
+          label: "Cartão de Cidadão (demo)",
+          fileUrl: "/Demo/cc_mohammed.jpeg",
+          uploadedBy: "cidadao",
+          status: "pendente",
+          submittedAt: "2026-02-18T10:00:00.000Z",
+        },
+        {
+          id: "doc-carta-001",
+          kind: "carta_conducao",
+          label: "Carta de Condução (demo)",
+          fileUrl: "/Demo/cartaconducao_mohammed.jpeg",
+          uploadedBy: "gestor",
+          status: "aprovado",
+          submittedAt: "2026-02-18T10:05:00.000Z",
+          reviewedAt: "2026-02-18T10:10:00.000Z",
+          reviewedBy: "G002",
+        },
+        {
+          id: "doc-pass-001",
+          kind: "passaporte",
+          label: "Passaporte (demo)",
+          fileUrl: "/Demo/passaporte_mohammed.jpeg",
+          uploadedBy: "cidadao",
+          status: "rejeitado",
+          submittedAt: "2026-02-18T10:12:00.000Z",
+          reviewedAt: "2026-02-18T10:15:00.000Z",
+          reviewedBy: "G002",
+          note: "Imagem ilegível (demo)",
+        },
+      ],
     },
     health: {
       usf: "USF Alta de Lisboa",
@@ -410,6 +466,41 @@ export const MOCK_BENEFICIARIES: Beneficiary[] = [
       drivingLicense: true,
       nationalityRequest: false,
       otherDocs: ["Passaporte", "Visto"],
+      attachments: [
+        {
+          id: "doc-cc-001",
+          kind: "cc",
+          label: "Cartão de Cidadão (demo)",
+          fileUrl: "/Demo/cc_sandra.jpeg",
+          uploadedBy: "cidadao",
+          status: "aprovado",
+          submittedAt: "2026-02-18T10:00:00.000Z",
+          reviewedAt: "2026-02-18T10:10:00.000Z",
+          reviewedBy: "G001",
+        },
+        {
+          id: "doc-carta-001",
+          kind: "carta_conducao",
+          label: "Carta de Condução (demo)",
+          fileUrl: "/Demo/cartaconducao_sandra.jpeg",
+          uploadedBy: "gestor",
+          status: "aprovado",
+          submittedAt: "2026-02-18T10:05:00.000Z",
+          reviewedAt: "2026-02-18T10:10:00.000Z",
+          reviewedBy: "G001",
+        },
+        {
+          id: "doc-pass-001",
+          kind: "passaporte",
+          label: "Passaporte (demo)",
+          fileUrl: "/Demo/passaporte_sandra.jpeg",
+          uploadedBy: "cidadao",
+          status: "aprovado",
+          submittedAt: "2026-02-18T10:12:00.000Z",
+          reviewedAt: "2026-02-18T10:15:00.000Z",
+          reviewedBy: "G001",
+        },
+      ],
     },
     health: {
       usf: "USF Baixa",

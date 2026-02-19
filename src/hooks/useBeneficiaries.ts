@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { toast } from "@/components/ui/sonner";
 import { Beneficiary, MOCK_BENEFICIARIES } from "../types/beneficiary";
 import type { ContactRequest, ContactRequestStatus } from "../types/beneficiary";
+import type { AttachedDoc, DocKind } from "../types/beneficiary";
+
 
 type CreateContactRequestInput = Omit<
   ContactRequest,
@@ -69,13 +71,24 @@ function normalizeBeneficiary(b: any): Beneficiary {
   const nextHistory = [...hist, ...reqSplit.closed];
   const nextHistoryAima = [...histAima, ...reqAimaSplit.closed];
 
+
   return {
     ...b,
+
+    // 👇 GARANTE QUE attachments EXISTE SEMPRE
+    documents: {
+      ...b.documents,
+      attachments: Array.isArray(b.documents?.attachments)
+        ? b.documents.attachments
+        : [],
+    },
+
     contactRequests: reqSplit.open,
     contactRequestsAIMA: reqAimaSplit.open,
     contactRequestsHistory: nextHistory,
     contactRequestsAIMAHistory: nextHistoryAima,
   } as Beneficiary;
+
 }
 
 export const useBeneficiaries = () => {
@@ -217,6 +230,102 @@ export const useBeneficiaries = () => {
     return req.id;
   };
 
+  const submitAttachment = (
+    beneficiaryId: string,
+    input: { kind: DocKind; label: string; fileUrl: string; uploadedBy: "cidadao" | "gestor" }
+  ) => {
+    const now = new Date().toISOString();
+
+    const newDoc: AttachedDoc = {
+      id: uid(),
+      kind: input.kind,
+      label: input.label,
+      fileUrl: input.fileUrl,
+      uploadedBy: input.uploadedBy,
+      status: input.uploadedBy === "gestor" ? "aprovado" : "pendente",
+      submittedAt: now,
+    };
+
+    const newData = beneficiaries.map((b) => {
+      if (b.id !== beneficiaryId) return b;
+
+      const current = Array.isArray(b.documents?.attachments) ? b.documents.attachments : [];
+
+      return normalizeBeneficiary({
+        ...b,
+        documents: { ...b.documents, attachments: [newDoc, ...current] },
+      });
+    });
+
+    saveBeneficiaries(newData);
+
+    if (input.uploadedBy === "gestor") toast.success("Documento anexado (aprovado)");
+    else toast.success("Documento submetido para aprovação");
+
+    return newDoc.id;
+  };
+
+  const approveAttachment = (beneficiaryId: string, docId: string, managerId: string) => {
+    const now = new Date().toISOString();
+
+    const newData = beneficiaries.map((b) => {
+      if (b.id !== beneficiaryId) return b;
+
+      const current = Array.isArray(b.documents?.attachments) ? b.documents.attachments : [];
+
+      const updated = current.map((d) =>
+        d.id === docId
+          ? {
+            ...d,
+            status: "aprovado" as const,
+            reviewedAt: now,
+            reviewedBy: managerId,
+            note: undefined,
+          }
+          : d
+      );
+
+      return normalizeBeneficiary({
+        ...b,
+        documents: { ...b.documents, attachments: updated },
+      });
+    });
+
+    saveBeneficiaries(newData);
+    toast.success("Documento aprovado");
+  };
+
+  const rejectAttachment = (beneficiaryId: string, docId: string, managerId: string, note: string) => {
+    const now = new Date().toISOString();
+
+    const newData = beneficiaries.map((b) => {
+      if (b.id !== beneficiaryId) return b;
+
+      const current = Array.isArray(b.documents?.attachments) ? b.documents.attachments : [];
+
+      const updated = current.map((d) =>
+        d.id === docId
+          ? {
+            ...d,
+            status: "rejeitado" as const,
+            reviewedAt: now,
+            reviewedBy: managerId,
+            note,
+          }
+          : d
+      );
+
+      return normalizeBeneficiary({
+        ...b,
+        documents: { ...b.documents, attachments: updated },
+      });
+    });
+
+    saveBeneficiaries(newData);
+    toast.success("Documento rejeitado");
+  };
+
+
   const closeContactRequestAIMA = (beneficiaryId: string, requestId: string) => {
     const now = new Date().toISOString();
 
@@ -258,6 +367,11 @@ export const useBeneficiaries = () => {
     // gestor/AIMA
     addContactRequestAIMA,
     closeContactRequestAIMA,
+
+    // anexos
+    submitAttachment,
+    approveAttachment,
+    rejectAttachment,
   };
 };
 

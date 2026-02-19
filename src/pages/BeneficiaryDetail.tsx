@@ -47,6 +47,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DocumentViewer } from "@/components/DocumentViewer";
+import type { DocKind } from "@/types/beneficiary";
+
+
 const EMPTY_BENEFICIARY: Beneficiary = {
   id: crypto.randomUUID(),
   processNumber: "",
@@ -76,6 +81,8 @@ const EMPTY_BENEFICIARY: Beneficiary = {
     drivingLicense: false,
     nationalityRequest: false,
     otherDocs: [],
+    attachments: [],
+
   },
   health: {
     usf: "",
@@ -138,6 +145,44 @@ const TAB_CONFIG = [
   { value: "contact", label: "Contacto", icon: Phone, sectionKey: "contactRequest" },
 ];
 
+const DEMO_DOCS = [
+  {
+    kind: "cc",
+    label: "Cartão de Cidadão",
+    fileUrl: "/Demo/cc_mohammed.jpeg",
+  },
+  {
+    kind: "carta_conducao",
+    label: "Carta de Condução",
+    fileUrl: "/Demo/cartaconducao_mohammed.jfif",
+  },
+  {
+    kind: "passaporte",
+    label: "Passaporte",
+    fileUrl: "/Demo/passaporte_mohammed.jfif",
+  },
+];
+
+
+function StatusBadge({ status }: { status: "aprovado" | "pendente" | "rejeitado" }) {
+  const label =
+    status === "aprovado" ? "Aprovado" : status === "pendente" ? "Para aprovação" : "Rejeitado";
+
+  const cls =
+    status === "aprovado"
+      ? "bg-green-100 text-green-800"
+      : status === "pendente"
+        ? "bg-yellow-100 text-yellow-800"
+        : "bg-red-100 text-red-800";
+
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+
 function safeArray<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
@@ -160,7 +205,11 @@ export default function BeneficiaryDetail() {
     loading,
     addContactRequest,
     closeContactRequest,
+    submitAttachment,
+    approveAttachment,
+    rejectAttachment,
   } = useBeneficiaries();
+
 
   const { session, loadingSession } = useAuth();
   const role: UserRole = session?.role ?? "cidadao";
@@ -174,6 +223,22 @@ export default function BeneficiaryDetail() {
 
   const [activeTab, setActiveTab] = useState("identity");
   const [formData, setFormData] = useState<Beneficiary | null>(null);
+
+  const [docViewerOpen, setDocViewerOpen] = useState(false);
+  const [docViewerUrl, setDocViewerUrl] = useState("");
+  const [docViewerTitle, setDocViewerTitle] = useState("");
+
+  const [submitDocOpen, setSubmitDocOpen] = useState(false);
+
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectNote, setRejectNote] = useState("");
+  const [rejectDocId, setRejectDocId] = useState<string | null>(null);
+
+  const openDoc = (title: string, url: string) => {
+    setDocViewerTitle(title);
+    setDocViewerUrl(url);
+    setDocViewerOpen(true);
+  };
 
   // ✅ form local do novo pedido
   const [newRequest, setNewRequest] = useState({
@@ -514,10 +579,10 @@ export default function BeneficiaryDetail() {
                 </CardHeader>
 
                 <CardContent className="space-y-6">
-                  {tab.value !== "contact" ? (
-                    renderSectionFields(tab.sectionKey)
-                  ) : (
+                  {tab.value === "contact" ? (
                     <>
+                      {/* ===================== CONTACTO (o teu bloco existente) ===================== */}
+
                       {/* Form novo pedido */}
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -561,12 +626,10 @@ export default function BeneficiaryDetail() {
                           </div>
                         </div>
 
-                        <div className="flex gap-3">
-                          <Button onClick={handleAddContactRequest} className="gap-2">
-                            <Save className="h-4 w-4" />
-                            Guardar Pedido
-                          </Button>
-                        </div>
+                        <Button onClick={handleAddContactRequest} className="gap-2">
+                          <Save className="h-4 w-4" />
+                          Guardar Pedido
+                        </Button>
                       </div>
 
                       <Separator />
@@ -661,8 +724,125 @@ export default function BeneficiaryDetail() {
                         )}
                       </div>
                     </>
+                  ) : tab.value === "documents" ? (
+                    <>
+                      {/* Campos da documentação */}
+                      {renderSectionFields(tab.sectionKey)}
+
+                      <Separator />
+
+                      {/* ===================== DOCUMENTOS ANEXOS ===================== */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-lg font-semibold">Documentos anexos</div>
+
+                          <Button variant="outline" onClick={() => setSubmitDocOpen(true)}>
+                            {effectiveRole === "gestor"
+                              ? "Anexar documento"
+                              : "Submeter documento"}
+                          </Button>
+                        </div>
+
+                        {safeArray<any>(formData.documents.attachments).length === 0 ? (
+                          <div className="text-sm text-muted-foreground">
+                            Sem documentos anexos.
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {safeArray<any>(formData.documents.attachments).map((d) => (
+                              <div
+                                key={d.id}
+                                className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="font-medium">{d.label}</div>
+                                  <StatusBadge status={d.status} />
+                                </div>
+
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openDoc(d.label, d.fileUrl)}
+                                  >
+                                    Ver
+                                  </Button>
+
+                                  {session?.role === "gestor" && d.status === "pendente" && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => {
+                                          approveAttachment(
+                                            formData.id,
+                                            d.id,
+                                            session.managerId
+                                          );
+
+                                          setFormData((prev) =>
+                                            prev
+                                              ? {
+                                                ...prev,
+                                                documents: {
+                                                  ...prev.documents,
+                                                  attachments:
+                                                    safeArray<any>(
+                                                      prev.documents.attachments
+                                                    ).map((x) =>
+                                                      x.id === d.id
+                                                        ? { ...x, status: "aprovado" }
+                                                        : x
+                                                    ),
+                                                },
+                                              }
+                                              : prev
+                                          );
+                                        }}
+                                      >
+                                        Aprovar
+                                      </Button>
+
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => {
+                                          setRejectDocId(d.id);
+                                          setRejectNote("");
+                                          setRejectOpen(true);
+                                        }}
+                                      >
+                                        Rejeitar
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+
+                                {d.note && (
+                                  <div className="text-sm text-muted-foreground">
+                                    Motivo: {d.note}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Viewer */}
+                      {docViewerUrl && (
+                        <DocumentViewer
+                          open={docViewerOpen}
+                          onOpenChange={setDocViewerOpen}
+                          title={docViewerTitle}
+                          url={docViewerUrl}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    renderSectionFields(tab.sectionKey)
                   )}
                 </CardContent>
+
               </Card>
             </TabsContent>
           ))}
