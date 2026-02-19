@@ -1,6 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useBeneficiaries } from "@/hooks/useBeneficiaries";
+import { useMemo, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+
 import {
   Users,
   Briefcase,
@@ -78,10 +84,42 @@ function formatPT(dateStr?: string) {
   if (!d) return "—";
   return d.toLocaleDateString("pt-PT");
 }
+const FIELD_LABELS: Record<string, string> = {
+  "personalInfo.phone": "Telefone",
+  "personalInfo.email": "Email",
+  "personalInfo.address": "Morada",
+  "personalInfo.name": "Nome",
+};
+
+function formatFieldLabel(path: string) {
+  return FIELD_LABELS[path] ?? path;
+}
+
+function safeString(v: unknown) {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "string") return v || "—";
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
 
 const Index = () => {
-  const { beneficiaries, closeContactRequest } = useBeneficiaries();
+  const {
+    beneficiaries,
+    closeContactRequest,
+
+    // ✅ novos
+    listPendingRequests,
+    approveChangeRequest,
+    rejectChangeRequest,
+  } = useBeneficiaries();
+
   const { session } = useAuth();
+
 
   // 🔹 Filtrar beneficiários do gestor atual
   const visibleBeneficiaries =
@@ -90,6 +128,38 @@ const Index = () => {
         (b) => b.personalInfo.managerId === session.managerId
       )
       : beneficiaries;
+  const managerId =
+    session?.role === "gestor"
+      ? (session as any).managerId ?? "GESTOR"
+      : "GESTOR";
+
+
+  // ✅ pedidos pendentes
+  const pendingAll = useMemo(() => listPendingRequests(), [listPendingRequests]);
+
+  // se quiseres filtrar só os beneficiários do gestor atual:
+  const pending = useMemo(() => {
+    if (session?.role !== "gestor") return pendingAll;
+    const visibleIds = new Set(visibleBeneficiaries.map((b) => b.id));
+    return pendingAll.filter((r) => visibleIds.has(r.beneficiaryId));
+  }, [pendingAll, session?.role, visibleBeneficiaries]);
+
+  // modal rejeição
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectNote, setRejectNote] = useState("");
+  const [rejectId, setRejectId] = useState<string | null>(null);
+
+  const openReject = (id: string) => {
+    setRejectId(id);
+    setRejectNote("");
+    setRejectOpen(true);
+  };
+
+  const doReject = () => {
+    if (!rejectId) return;
+    rejectChangeRequest(rejectId, managerId, rejectNote.trim() || undefined);
+    setRejectOpen(false);
+  };
 
   const managerName =
     session?.role === "gestor"
@@ -214,7 +284,106 @@ const Index = () => {
           <StatCard title="Empregados" value={employed} icon={Briefcase} />
           <StatCard title="Processos Ativos" value={activeProcesses} icon={TrendingUp} />
           <StatCard title="Situação Habitacional" value={housingOk} icon={Home} />
+          <StatCard title="Pedidos Pendentes" value={pending.length} icon={AlertTriangle} />
+
         </div>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Pedidos pendentes (aprovação)</CardTitle>
+            <div className="text-sm text-muted-foreground">
+              Total: <span className="font-semibold">{pending.length}</span>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {pending.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                Sem pedidos pendentes neste momento.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {pending.map((r) => {
+                  const b = beneficiaries.find((x) => x.id === r.beneficiaryId);
+                  const name = b?.personalInfo?.name ?? "Beneficiário";
+                  const proc = b?.processNumber ?? "—";
+
+                  return (
+                    <div key={r.id} className="rounded-md border p-3 space-y-2">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <div className="font-medium">
+                            {name} <span className="text-muted-foreground">• Proc. {proc}</span>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Campo:{" "}
+                            <span className="font-medium text-foreground">
+                              {formatFieldLabel(r.fieldPath)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => approveChangeRequest(r.id, managerId)}>
+                            Aprovar
+                          </Button>
+
+                          <Button size="sm" variant="destructive" onClick={() => openReject(r.id)}>
+                            Rejeitar
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-md bg-muted/50 p-2">
+                          <div className="text-xs text-muted-foreground">Antes</div>
+                          <div className="font-medium break-words">{safeString(r.oldValue)}</div>
+                        </div>
+
+                        <div className="rounded-md bg-muted/50 p-2">
+                          <div className="text-xs text-muted-foreground">Depois</div>
+                          <div className="font-medium break-words">{safeString(r.newValue)}</div>
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-muted-foreground">
+                        Submetido em {new Date(r.createdAt).toLocaleString("pt-PT")}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Rejeitar pedido</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-2">
+                  <Label>Motivo (opcional)</Label>
+                  <Input
+                    value={rejectNote}
+                    onChange={(e) => setRejectNote(e.target.value)}
+                    placeholder="Ex: Informação não comprovada / documento em falta…"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setRejectOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button variant="destructive" onClick={doReject}>
+                    Rejeitar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </CardContent>
+        </Card>
 
         {/* Lembretes */}
         <Card>

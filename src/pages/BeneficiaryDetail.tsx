@@ -1,5 +1,6 @@
 import { Layout } from "@/components/Layout";
 import { useBeneficiaries } from "@/hooks/useBeneficiaries";
+import { toast } from "@/components/ui/sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -25,7 +26,9 @@ import {
   Briefcase,
   HandCoins,
   Phone,
+  ClipboardList,
 } from "lucide-react";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type {
@@ -143,6 +146,8 @@ const TAB_CONFIG = [
   { value: "employment", label: "Emprego", icon: Briefcase, sectionKey: "employment" },
   { value: "social", label: "Apoios", icon: HandCoins, sectionKey: "socialSupport" },
   { value: "contact", label: "Contacto", icon: Phone, sectionKey: "contactRequest" },
+  { value: "requests", label: "Pedidos", icon: ClipboardList, sectionKey: "requests" },
+
 ];
 
 const DEMO_DOCS = [
@@ -194,6 +199,8 @@ export default function BeneficiaryDetail() {
 
   // evita re-carregar / re-inicializar o formData a cada render
   const loadedIdRef = useRef<string | null>(null);
+  // ✅ snapshot do beneficiário original (para comparar alterações do cidadão)
+  const originalRef = useRef<Beneficiary | null>(null);
 
   const navigate = useNavigate();
 
@@ -208,7 +215,12 @@ export default function BeneficiaryDetail() {
     submitAttachment,
     approveAttachment,
     rejectAttachment,
+
+    // ✅ NOVO
+    createChangeRequest,
+    listRequestsByBeneficiary,
   } = useBeneficiaries();
+
 
 
   const { session, loadingSession } = useAuth();
@@ -263,6 +275,48 @@ export default function BeneficiaryDetail() {
       .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? ""));
   }, [formData]);
 
+  const pendingByFieldPath = useMemo(() => {
+    if (!formData) return new Map<string, any>();
+
+    const list = listRequestsByBeneficiary(formData.id);
+
+    const map = new Map<string, any>();
+    for (const r of list) {
+      if (r.status !== "pending") continue;
+      const prev = map.get(r.fieldPath);
+      if (!prev || (prev.createdAt ?? "") < (r.createdAt ?? "")) {
+        map.set(r.fieldPath, r);
+      }
+    }
+    return map;
+  }, [formData, listRequestsByBeneficiary]);
+
+  const myPendingRequests = useMemo(() => {
+    if (!formData) return [];
+    return listRequestsByBeneficiary(formData.id)
+      .filter((r) => r.status === "pending")
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  }, [formData, listRequestsByBeneficiary]);
+
+  const myApprovedRequests = useMemo(() => {
+    if (!formData) return [];
+    return listRequestsByBeneficiary(formData.id)
+      .filter((r) => r.status === "approved")
+      .sort((a, b) =>
+        (b.decidedAt ?? b.createdAt ?? "").localeCompare(a.decidedAt ?? a.createdAt ?? "")
+      );
+  }, [formData, listRequestsByBeneficiary]);
+
+  const myRejectedRequests = useMemo(() => {
+    if (!formData) return [];
+    return listRequestsByBeneficiary(formData.id)
+      .filter((r) => r.status === "rejected")
+      .sort((a, b) =>
+        (b.decidedAt ?? b.createdAt ?? "").localeCompare(a.decidedAt ?? a.createdAt ?? "")
+      );
+  }, [formData, listRequestsByBeneficiary]);
+
+
 
   // Bloquear cidadao de ver outros
   useEffect(() => {
@@ -288,6 +342,7 @@ export default function BeneficiaryDetail() {
         ...EMPTY_BENEFICIARY,
         id: crypto.randomUUID(),
       });
+      originalRef.current = null;
       loadedIdRef.current = currentKey;
       return;
     }
@@ -298,6 +353,8 @@ export default function BeneficiaryDetail() {
       loadedIdRef.current = currentKey;
       return;
     }
+    originalRef.current = data;
+    loadedIdRef.current = currentKey;
 
     setFormData({
       ...data,
@@ -338,13 +395,71 @@ export default function BeneficiaryDetail() {
 
   // Guardar dados gerais
   const handleSave = () => {
+    if (!formData) return;
+
+    // 🆕 Criar novo beneficiário (gestor)
     if (id === "new") {
       addBeneficiary(formData);
       navigate(`/beneficiaries/${formData.id}`);
-    } else {
+      return;
+    }
+
+    // 👨‍💼 Gestor — guarda direto
+    if (effectiveRole === "gestor") {
       updateBeneficiary(formData.id, formData);
+      return;
+    }
+
+    // 🧑‍🤝‍🧑 Cidadão — criar pedidos de alteração
+    const original = originalRef.current;
+    if (!original) return;
+
+    let created = 0;
+
+    Object.entries(SECTION_FIELDS).forEach(([_, fields]) => {
+      fields.forEach((fc: any) => {
+        // ⚠️ só campos editáveis pelo cidadão
+        if (fc.editableRoles && !fc.editableRoles.includes("cidadao")) return;
+
+        const oldVal =
+          fc.section === "root"
+            ? (original as any)[fc.key]
+            : (original as any)[fc.section]?.[fc.key];
+
+        const newVal =
+          fc.section === "root"
+            ? (formData as any)[fc.key]
+            : (formData as any)[fc.section]?.[fc.key];
+
+        const changed = JSON.stringify(oldVal) !== JSON.stringify(newVal);
+        if (!changed) return;
+
+        const fieldPath =
+          fc.section === "root"
+            ? `${fc.key}`
+            : `${fc.section}.${fc.key}`;
+
+        createChangeRequest({
+          beneficiaryId: formData.id,
+          fieldPath,
+          oldValue: oldVal,
+          newValue: newVal,
+        });
+
+        created++;
+      });
+    });
+
+    if (created > 0) {
+      toast.success("Alterações submetidas para aprovação");
+      // força re-render com os dados atuais (sem recarregar o beneficiário)
+      setFormData((prev) => (prev ? { ...prev } : prev));
+
+    } else {
+      toast.message("Sem alterações para submeter");
     }
   };
+
 
   // Criar novo pedido (cidadão)
   const handleAddContactRequest = () => {
@@ -448,22 +563,45 @@ export default function BeneficiaryDetail() {
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {fields.map((fieldConfig) => (
-          <div
-            key={fieldConfig.key}
-            className={fieldConfig.fieldType === "textarea" ? "md:col-span-2" : ""}
-          >
-            <FieldRenderer
-              config={fieldConfig}
-              value={getFieldValue(fieldConfig)}
-              onChange={(val) => setFieldValue(fieldConfig, val)}
-              role={effectiveRole}
-            />
+        {fields.map((fieldConfig) => {
+          const fieldPath =
+            fieldConfig.section === "root"
+              ? `${fieldConfig.key}`
+              : `${fieldConfig.section}.${fieldConfig.key}`;
 
+          const pendingReq = pendingByFieldPath.get(fieldPath);
 
+          return (
+            <div
+              key={fieldConfig.key}
+              className={fieldConfig.fieldType === "textarea" ? "md:col-span-2" : ""}
+            >
+              {/* ✅ Badge pendente */}
+              {pendingReq && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">
+                    Pendente de aprovação
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Submetido em{" "}
+                    {new Date(pendingReq.createdAt).toLocaleDateString("pt-PT")}
+                  </span>
+                </div>
+              )}
 
-          </div>
-        ))}
+              <FieldRenderer
+                config={fieldConfig}
+                value={getFieldValue(fieldConfig)}
+                onChange={(val) => setFieldValue(fieldConfig, val)}
+                role={effectiveRole}
+
+                // ✅ (opcional/recomendado) bloquear o cidadão enquanto está pendente
+                disabled={!!pendingReq && effectiveRole === "cidadao"}
+              />
+            </div>
+          );
+        })}
+
       </div>
     );
   };
@@ -503,8 +641,9 @@ export default function BeneficiaryDetail() {
           <div className="flex items-center gap-3">
             <Button onClick={handleSave} className="gap-2">
               <Save className="h-4 w-4" />
-              Guardar
+              {effectiveRole === "gestor" ? "Guardar" : "Submeter"}
             </Button>
+
           </div>
         </div>
 
@@ -567,8 +706,177 @@ export default function BeneficiaryDetail() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="requests">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Pedidos
+                </CardTitle>
+                <CardDescription>
+                  Alterações submetidas para aprovação do gestor.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="space-y-6">
+                {/* Pendentes */}
+                <div className="space-y-3">
+                  <div className="text-lg font-semibold">Pendentes</div>
+
+                  {myPendingRequests.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Sem pedidos pendentes.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {myPendingRequests.map((r) => (
+                        <div key={r.id} className="rounded-md border p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="font-medium">
+                              Campo: <span className="text-muted-foreground">{r.fieldPath}</span>
+                            </div>
+                            <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">
+                              Pendente
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-md bg-muted/50 p-2">
+                              <div className="text-xs text-muted-foreground">Antes</div>
+                              <div className="font-medium break-words">
+                                {r.oldValue == null ? "—" : String(r.oldValue)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-md bg-muted/50 p-2">
+                              <div className="text-xs text-muted-foreground">Depois</div>
+                              <div className="font-medium break-words">
+                                {r.newValue == null ? "—" : String(r.newValue)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-muted-foreground">
+                            Submetido em {new Date(r.createdAt).toLocaleString("pt-PT")}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Aprovados */}
+                <div className="space-y-3">
+                  <div className="text-lg font-semibold">Aprovados</div>
+
+                  {myApprovedRequests.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Sem pedidos aprovados.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {myApprovedRequests.map((r) => (
+                        <div key={r.id} className="rounded-md border p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="font-medium">
+                              Campo: <span className="text-muted-foreground">{r.fieldPath}</span>
+                            </div>
+                            <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800">
+                              Aprovado
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-md bg-muted/50 p-2">
+                              <div className="text-xs text-muted-foreground">Antes</div>
+                              <div className="font-medium break-words">
+                                {r.oldValue == null ? "—" : String(r.oldValue)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-md bg-muted/50 p-2">
+                              <div className="text-xs text-muted-foreground">Depois</div>
+                              <div className="font-medium break-words">
+                                {r.newValue == null ? "—" : String(r.newValue)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-muted-foreground">
+                            Submetido em {new Date(r.createdAt).toLocaleString("pt-PT")}
+                            {r.decidedAt && <> • Decidido em {new Date(r.decidedAt).toLocaleString("pt-PT")}</>}
+                            {r.decidedBy && <> • Por {r.decidedBy}</>}
+                          </div>
+
+                          {r.decisionNote && (
+                            <div className="text-sm text-muted-foreground">
+                              <strong>Nota:</strong> {r.decisionNote}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Rejeitados */}
+                <div className="space-y-3">
+                  <div className="text-lg font-semibold">Rejeitados</div>
+
+                  {myRejectedRequests.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Sem pedidos rejeitados.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {myRejectedRequests.map((r) => (
+                        <div key={r.id} className="rounded-md border p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="font-medium">
+                              Campo: <span className="text-muted-foreground">{r.fieldPath}</span>
+                            </div>
+                            <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800">
+                              Rejeitado
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div className="rounded-md bg-muted/50 p-2">
+                              <div className="text-xs text-muted-foreground">Antes</div>
+                              <div className="font-medium break-words">
+                                {r.oldValue == null ? "—" : String(r.oldValue)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-md bg-muted/50 p-2">
+                              <div className="text-xs text-muted-foreground">Depois</div>
+                              <div className="font-medium break-words">
+                                {r.newValue == null ? "—" : String(r.newValue)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-muted-foreground">
+                            Submetido em {new Date(r.createdAt).toLocaleString("pt-PT")}
+                            {r.decidedAt && <> • Decidido em {new Date(r.decidedAt).toLocaleString("pt-PT")}</>}
+                            {r.decidedBy && <> • Por {r.decidedBy}</>}
+                          </div>
+
+                          {r.decisionNote && (
+                            <div className="text-sm text-muted-foreground">
+                              <strong>Nota:</strong> {r.decisionNote}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+
+            </Card>
+          </TabsContent>
+
           {/* Outras tabs */}
-          {TAB_CONFIG.filter((t) => t.value !== "identity").map((tab) => (
+          {TAB_CONFIG.filter((t) => t.value !== "identity" && t.value !== "requests").map((tab) => (
             <TabsContent key={tab.value} value={tab.value}>
               <Card>
                 <CardHeader>

@@ -3,6 +3,8 @@ import { toast } from "@/components/ui/sonner";
 import { Beneficiary, MOCK_BENEFICIARIES } from "../types/beneficiary";
 import type { ContactRequest, ContactRequestStatus } from "../types/beneficiary";
 import type { AttachedDoc, DocKind } from "../types/beneficiary";
+import type { ChangeRequest } from "@/types/changerequest";
+import { setByPath } from "@/lib/objectPath";
 
 
 type CreateContactRequestInput = Omit<
@@ -12,6 +14,7 @@ type CreateContactRequestInput = Omit<
 
 // ✅ chave versionada (fora das funções!)
 const BENEF_KEY = "beneficiaries_v2";
+const CR_KEY = "change_requests_v1";
 
 function uid() {
   // randomUUID é ótimo quando existe; fallback garante compatibilidade
@@ -94,11 +97,19 @@ function normalizeBeneficiary(b: any): Beneficiary {
 export const useBeneficiaries = () => {
   const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
 
   const saveBeneficiaries = (newData: Beneficiary[]) => {
     const normalized = newData.map(normalizeBeneficiary);
     setBeneficiaries(normalized);
     localStorage.setItem(BENEF_KEY, JSON.stringify(normalized));
+
+
+
+  };
+  const saveChangeRequests = (next: ChangeRequest[]) => {
+    setChangeRequests(next);
+    localStorage.setItem(CR_KEY, JSON.stringify(next));
   };
 
   useEffect(() => {
@@ -128,6 +139,18 @@ export const useBeneficiaries = () => {
       }
     } else {
       seed();
+    }
+    // ✅ load changeRequests
+    const storedCR = localStorage.getItem(CR_KEY);
+    if (storedCR) {
+      try {
+        const parsed = JSON.parse(storedCR);
+        setChangeRequests(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setChangeRequests([]);
+      }
+    } else {
+      setChangeRequests([]);
     }
 
     setLoading(false);
@@ -325,7 +348,6 @@ export const useBeneficiaries = () => {
     toast.success("Documento rejeitado");
   };
 
-
   const closeContactRequestAIMA = (beneficiaryId: string, requestId: string) => {
     const now = new Date().toISOString();
 
@@ -352,7 +374,117 @@ export const useBeneficiaries = () => {
     toast.success("Pedido AIMA fechado");
   };
 
+  // 👇👇👇 COLE AQUI O PONTO 4 👇👇👇
+
+
+  // =========================
+  // CHANGE REQUESTS (aprovação de alterações)
+  // =========================
+
+  type CreateChangeRequestInput = {
+    beneficiaryId: string;
+    fieldPath: string;
+    oldValue: unknown;
+    newValue: unknown;
+  };
+
+  const createChangeRequest = (input: CreateChangeRequestInput) => {
+    const req: ChangeRequest = {
+      id: uid(),
+      beneficiaryId: input.beneficiaryId,
+      fieldPath: input.fieldPath,
+      oldValue: input.oldValue,
+      newValue: input.newValue,
+      status: "pending" as const,
+      createdAt: new Date().toISOString(),
+    };
+
+    const hasPendingSameField = changeRequests.some(
+      (r) =>
+        r.beneficiaryId === input.beneficiaryId &&
+        r.fieldPath === input.fieldPath &&
+        r.status === "pending"
+    );
+
+    if (hasPendingSameField) {
+      toast.message("Já existe um pedido pendente para este campo.");
+      return "";
+    }
+
+    const next = [req, ...changeRequests];
+    saveChangeRequests(next);
+    toast.success("Alteração enviada para aprovação");
+    return req.id;
+  };
+
+  const listRequestsByBeneficiary = (beneficiaryId: string) =>
+    changeRequests.filter((r) => r.beneficiaryId === beneficiaryId);
+
+  const listPendingRequests = () =>
+    changeRequests.filter((r) => r.status === "pending");
+
+  const approveChangeRequest = (
+    requestId: string,
+    managerId: string,
+    note?: string
+  ) => {
+    const req = changeRequests.find((r) => r.id === requestId);
+    if (!req) return;
+
+    const now = new Date().toISOString();
+
+    const nextCR = changeRequests.map((r) =>
+      r.id === requestId
+        ? {
+          ...r,
+          status: "approved" as const,
+          decidedAt: now,
+          decidedBy: managerId,
+          decisionNote: note,
+        }
+        : r
+    );
+
+    saveChangeRequests(nextCR);
+
+    const nextBenefs = beneficiaries.map((b) => {
+      if (b.id !== req.beneficiaryId) return b;
+      const updated = setByPath(b as any, req.fieldPath, req.newValue);
+      return normalizeBeneficiary(updated);
+    });
+
+    saveBeneficiaries(nextBenefs);
+    toast.success("Pedido aprovado e aplicado");
+  };
+
+  const rejectChangeRequest = (
+    requestId: string,
+    managerId: string,
+    note?: string
+  ) => {
+    const now = new Date().toISOString();
+
+    const nextCR = changeRequests.map((r) =>
+      r.id === requestId
+        ? {
+          ...r,
+          status: "rejected" as const,
+          decidedAt: now,
+          decidedBy: managerId,
+          decisionNote: note,
+        }
+        : r
+    );
+
+    saveChangeRequests(nextCR);
+    toast.success("Pedido rejeitado");
+  };
+
+  // 👆👆👆 FIM DO PONTO 4 👆👆👆
+
+
   return {
+
     beneficiaries,
     loading,
     addBeneficiary,
@@ -372,6 +504,14 @@ export const useBeneficiaries = () => {
     submitAttachment,
     approveAttachment,
     rejectAttachment,
+
+    // ✅ change requests
+    changeRequests,
+    createChangeRequest,
+    listRequestsByBeneficiary,
+    listPendingRequests,
+    approveChangeRequest,
+    rejectChangeRequest,
   };
 };
 

@@ -23,10 +23,13 @@ interface FieldRendererProps {
   value: any;
   onChange: (value: any) => void;
   role: UserRole;
+  disabled?: boolean;
 }
 
-export function FieldRenderer({ config, value, onChange, role }: FieldRendererProps) {
+export function FieldRenderer({ config, value, onChange, role, disabled }: FieldRendererProps) {
   const isEditable = role === "gestor" ? config.editableByGestor : config.editableByCidadao;
+  const isPendingDisabled = !!disabled;
+  const canEdit = isEditable && !isPendingDisabled;
 
   const displayValue = () => {
     if (value === undefined || value === null || value === "") return "—";
@@ -41,13 +44,25 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
         <Label className="text-sm font-medium text-foreground">
           {config.label}
         </Label>
+
         {!isEditable && (
           <Lock className="h-3 w-3 text-muted-foreground" />
         )}
-        {config.requiresValidation && role === "cidadao" && isEditable && (
+
+        {/* ✅ BADGE PENDENTE */}
+        {isPendingDisabled && (
+          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+            Pendente
+          </Badge>
+        )}
+
+        {config.requiresValidation && role === "cidadao" && isEditable && !isPendingDisabled && (
           <Tooltip>
             <TooltipTrigger>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-warning-foreground/30 text-warning-foreground bg-warning">
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 border-warning-foreground/30 text-warning-foreground bg-warning"
+              >
                 Validação
               </Badge>
             </TooltipTrigger>
@@ -56,6 +71,7 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
             </TooltipContent>
           </Tooltip>
         )}
+
         <Tooltip>
           <TooltipTrigger>
             <Info className="h-3 w-3 text-muted-foreground/50" />
@@ -66,26 +82,18 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
         </Tooltip>
       </div>
 
-      {!isEditable ? (
+      {!canEdit ? (
         <div className="flex h-10 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           {displayValue()}
         </div>
       ) : (
         <>
-          {/*           {config.fieldType === "text" && (
-            <Input
-              value={value ?? ""}
-              onChange={(e) => onChange(e.target.value)}
-            />
-          )} */}
           {config.fieldType === "text" && (
             <Input
               value={Array.isArray(value) ? value.join(", ") : (value ?? "")}
               onChange={(e) => {
                 const v = e.target.value;
 
-                // Se o valor atual for um array (ex: languages, otherDocs, supportTypes...)
-                // guardamos como array (separado por vírgulas)
                 if (Array.isArray(value)) {
                   onChange(
                     v
@@ -99,6 +107,7 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
               }}
             />
           )}
+
           {config.fieldType === "number" && (
             <Input
               type="text"
@@ -107,6 +116,7 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
               onChange={(e) => onChange(e.target.value)}
             />
           )}
+
           {config.fieldType === "date" && (
             <Input
               type="date"
@@ -114,6 +124,7 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
               onChange={(e) => onChange(e.target.value)}
             />
           )}
+
           {config.fieldType === "select" && config.options && (
             <Select value={value ?? ""} onValueChange={onChange}>
               <SelectTrigger>
@@ -128,17 +139,16 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
               </SelectContent>
             </Select>
           )}
+
           {config.fieldType === "boolean" && (
             <div className="flex items-center gap-2 h-10">
-              <Switch
-                checked={!!value}
-                onCheckedChange={onChange}
-              />
+              <Switch checked={!!value} onCheckedChange={onChange} />
               <span className="text-sm text-muted-foreground">
                 {value ? "Sim" : "Não"}
               </span>
             </div>
           )}
+
           {config.fieldType === "textarea" && (
             <Textarea
               value={value ?? ""}
@@ -146,6 +156,7 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
               rows={3}
             />
           )}
+
           {config.fieldType === "link" && (
             <Input
               value={value ?? ""}
@@ -156,5 +167,6 @@ export function FieldRenderer({ config, value, onChange, role }: FieldRendererPr
         </>
       )}
     </div>
+
   );
 }
