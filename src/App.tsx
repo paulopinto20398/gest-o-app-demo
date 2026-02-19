@@ -38,7 +38,15 @@ const App = () => (
           {/* login explícito */}
           <Route path="/login" element={<Login />} />
 
-          <Route path="/manager/relatorio" element={<Relatorio />} />
+          <Route
+            path="/manager/relatorio"
+            element={
+              <ProtectedRoute allow={["gestor"]}>
+                <Relatorio />
+              </ProtectedRoute>
+            }
+          />
+
 
           {/* ========================= */}
           {/* CIDADÃO */}
