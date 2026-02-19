@@ -13,6 +13,7 @@ import Login from "./pages/Login";
 import Me from "./pages/Me";
 import ManagerBeneficiaries from "./pages/ManagerBeneficiaries";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import Relatorio from "@/pages/Relatorio";
 
 
 
@@ -37,7 +38,7 @@ const App = () => (
           {/* login explícito */}
           <Route path="/login" element={<Login />} />
 
-
+          <Route path="/manager/relatorio" element={<Relatorio />} />
 
           {/* ========================= */}
           {/* CIDADÃO */}
@@ -102,6 +103,7 @@ const App = () => (
           {/* ========================= */}
 
           <Route path="*" element={<NotFound />} />
+
 
         </Routes>
 

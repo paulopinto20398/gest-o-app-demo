@@ -10,7 +10,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, BarChart3 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -22,7 +22,7 @@ export function AppSidebar() {
 
   const items = [
     {
-      title: "Dashboard",
+      title: "Página Inicial",
       url: "/manager",
       icon: LayoutDashboard,
     },
@@ -30,6 +30,11 @@ export function AppSidebar() {
       title: "Beneficiários",
       url: "/manager/beneficiaries",
       icon: Users,
+    },
+    {
+      title: "Relatório",
+      url: "/manager/relatorio",
+      icon: BarChart3,
     },
     {
       title: "Configurações",
