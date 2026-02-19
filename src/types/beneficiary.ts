@@ -46,6 +46,7 @@ export interface Beneficiary {
   processNumber: string;
   photoUrl?: string;
   status: "active" | "archived" | "pending";
+  internalNotes?: Record<string, string>;
 
   personalInfo: {
     name: string;
@@ -81,6 +82,7 @@ export interface Beneficiary {
     nationalityRequest: boolean;
     otherDocs: string[];
     attachments: AttachedDoc[];
+    paradeiroKnown?: boolean
   };
 
   health: {

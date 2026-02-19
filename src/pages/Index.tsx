@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useNavigate } from "react-router-dom";
 
 import {
   Users,
@@ -19,6 +20,7 @@ import {
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import type { ContactRequest } from "@/types/beneficiary";
+import { MapPinOff } from "lucide-react";
 
 const StatCard = ({
   title,
@@ -177,6 +179,14 @@ const Index = () => {
   const housingOk = visibleBeneficiaries.filter((b) =>
     (b.housing.satisfaction || "").includes("Satisfeito")
   ).length;
+  const unknownWhereaboutsList = visibleBeneficiaries.filter(
+    (b) => b.documents?.paradeiroKnown === false
+  );
+
+  const unknownWhereaboutsCount = unknownWhereaboutsList.length;
+
+  const navigate = useNavigate();
+
 
   // =========================
   // Lembretes + Histórico
@@ -284,8 +294,29 @@ const Index = () => {
           <StatCard title="Empregados" value={employed} icon={Briefcase} />
           <StatCard title="Processos Ativos" value={activeProcesses} icon={TrendingUp} />
           <StatCard title="Situação Habitacional" value={housingOk} icon={Home} />
-          <StatCard title="Pedidos Pendentes" value={pending.length} icon={AlertTriangle} />
 
+          {/* <StatCard title="Paradeiro Desconhecido" value={unknownWhereabouts.length} icon={Home} /> */}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard title="Pedidos Pendentes" value={pending.length} icon={AlertTriangle} />
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate("beneficiaries?filter=paradeiro")
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") navigate("beneficiaries?filter=paradeiro");
+            }}
+            className="cursor-pointer"
+          >
+            <StatCard
+              title="Paradeiro desconhecido"
+              value={unknownWhereaboutsCount}
+              icon={MapPinOff}
+              description="Clique para ver a lista"
+            />
+
+          </div>
         </div>
 
         <Card>
@@ -449,6 +480,8 @@ const Index = () => {
           </CardContent>
         </Card>
 
+
+
         {/* Histórico */}
         <Card>
           <CardHeader>
@@ -487,6 +520,45 @@ const Index = () => {
                       </div>
                       <div className="text-xs text-muted-foreground">Fechado</div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Paradeiro desconhecido</CardTitle>
+          </CardHeader>
+
+          <CardContent>
+            {unknownWhereaboutsList.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                Não existem beneficiários com paradeiro desconhecido.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {unknownWhereaboutsList.map((b) => (
+                  <div
+                    key={b.id}
+                    className="flex items-center justify-between rounded-md border p-3"
+                  >
+                    <div>
+                      <div className="font-medium">{b.personalInfo?.name ?? "—"}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Processo: {b.processNumber || "—"}
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => (window.location.href = `/beneficiaries/${b.id}`)}
+                    >
+                      Ver
+                    </Button>
                   </div>
                 ))}
               </div>

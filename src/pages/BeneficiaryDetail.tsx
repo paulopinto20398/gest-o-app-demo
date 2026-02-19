@@ -1,6 +1,7 @@
 import { Layout } from "@/components/Layout";
 import { useBeneficiaries } from "@/hooks/useBeneficiaries";
 import { toast } from "@/components/ui/sonner";
+import { Switch } from "@/components/ui/switch";
 import { useParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -42,6 +43,7 @@ import { FieldRenderer } from "@/components/FieldRenderer";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -76,6 +78,8 @@ const EMPTY_BENEFICIARY: Beneficiary = {
     managerName: "",
     managerId: "",
     dataSharingAuthorized: false,
+
+
   },
   documents: {
     regularizationProcessType: "",
@@ -85,6 +89,8 @@ const EMPTY_BENEFICIARY: Beneficiary = {
     nationalityRequest: false,
     otherDocs: [],
     attachments: [],
+    paradeiroKnown: true,
+
 
   },
   health: {
@@ -133,6 +139,8 @@ const EMPTY_BENEFICIARY: Beneficiary = {
   contactRequestsAIMA: [],
   contactRequestsHistory: [],
   contactRequestsAIMAHistory: [],
+
+  internalNotes: {},
 };
 
 const TAB_CONFIG = [
@@ -192,6 +200,51 @@ function safeArray<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
+function InternalNotesBlock({
+  tabKey,
+  formData,
+  setFormData,
+}: {
+  tabKey: string;
+  formData: Beneficiary;
+  setFormData: React.Dispatch<React.SetStateAction<Beneficiary | null>>;
+}) {
+  const notes = formData.internalNotes?.[tabKey] ?? "";
+
+  return (
+    <Card className="border-dashed">
+      <CardHeader>
+        <CardTitle className="text-base">Notas internas (Gestor)</CardTitle>
+        <CardDescription>
+          Informação interna não visível ao beneficiário.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent>
+        <Textarea
+          placeholder="Escrever notas internas..."
+          value={notes}
+          onChange={(e) => {
+            const val = e.target.value;
+
+            setFormData((prev) =>
+              prev
+                ? {
+                  ...prev,
+                  internalNotes: {
+                    ...(prev.internalNotes ?? {}),
+                    [tabKey]: val,
+                  },
+                }
+                : prev
+            );
+          }}
+          rows={4}
+        />
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function BeneficiaryDetail() {
   const { id } = useParams();
@@ -700,7 +753,18 @@ export default function BeneficiaryDetail() {
                     )}
                   </div>
 
-                  <div className="flex-1">{renderSectionFields("identification")}</div>
+                  <div className="flex-1 space-y-6">
+                    {renderSectionFields("identification")}
+
+                    {effectiveRole === "gestor" && (
+                      <InternalNotesBlock
+                        tabKey="identity"
+                        formData={formData}
+                        setFormData={setFormData}
+                      />
+                    )}
+                  </div>
+
                 </div>
               </CardContent>
             </Card>
@@ -876,284 +940,257 @@ export default function BeneficiaryDetail() {
           </TabsContent>
 
           {/* Outras tabs */}
-          {TAB_CONFIG.filter((t) => t.value !== "identity" && t.value !== "requests").map((tab) => (
-            <TabsContent key={tab.value} value={tab.value}>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <tab.icon className="h-5 w-5" />
-                    {tab.label}
-                  </CardTitle>
-                </CardHeader>
+          {TAB_CONFIG
+            .filter((t) => t.value !== "identity" && t.value !== "requests")
+            .map((tab) => (
+              <TabsContent key={tab.value} value={tab.value}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <tab.icon className="h-5 w-5" />
+                      {tab.label}
+                    </CardTitle>
+                  </CardHeader>
 
-                <CardContent className="space-y-6">
-                  {tab.value === "contact" ? (
-                    <>
-                      {/* ===================== CONTACTO (o teu bloco existente) ===================== */}
+                  <CardContent className="space-y-6">
+                    {tab.value === "contact" ? (
+                      <>
+                        {/* Form novo pedido */}
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Tipo de contacto</Label>
+                              <Select
+                                value={newRequest.type}
+                                onValueChange={(v) =>
+                                  setNewRequest((p) => ({ ...p, type: v }))
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecionar" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Telefónico">Telefónico</SelectItem>
+                                  <SelectItem value="E-mail">E-mail</SelectItem>
+                                  <SelectItem value="Presencial">Presencial</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
 
-                      {/* Form novo pedido */}
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Tipo de contacto</Label>
-                            <Select
-                              value={newRequest.type}
-                              onValueChange={(v) => setNewRequest((p) => ({ ...p, type: v }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecionar" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Telefónico">Telefónico</SelectItem>
-                                <SelectItem value="E-mail">E-mail</SelectItem>
-                                <SelectItem value="Presencial">Presencial</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <div className="space-y-2">
+                              <Label>Data agendamento</Label>
+                              <Input
+                                type="date"
+                                value={newRequest.scheduledDate}
+                                onChange={(e) =>
+                                  setNewRequest((p) => ({
+                                    ...p,
+                                    scheduledDate: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+
+                            <div className="space-y-2 md:col-span-2">
+                              <Label>Assunto</Label>
+                              <Input
+                                value={newRequest.subject}
+                                onChange={(e) =>
+                                  setNewRequest((p) => ({ ...p, subject: e.target.value }))
+                                }
+                                placeholder="Escrever assunto…"
+                              />
+                            </div>
                           </div>
 
-                          <div className="space-y-2">
-                            <Label>Data agendamento</Label>
-                            <Input
-                              type="date"
-                              value={newRequest.scheduledDate}
-                              onChange={(e) =>
-                                setNewRequest((p) => ({ ...p, scheduledDate: e.target.value }))
-                              }
-                            />
-                          </div>
-
-                          <div className="space-y-2 md:col-span-2">
-                            <Label>Assunto</Label>
-                            <Input
-                              value={newRequest.subject}
-                              onChange={(e) =>
-                                setNewRequest((p) => ({ ...p, subject: e.target.value }))
-                              }
-                              placeholder="Escrever assunto…"
-                            />
-                          </div>
-                        </div>
-
-                        <Button onClick={handleAddContactRequest} className="gap-2">
-                          <Save className="h-4 w-4" />
-                          Guardar Pedido
-                        </Button>
-                      </div>
-
-                      <Separator />
-
-                      {/* Em curso */}
-                      <div className="space-y-3">
-                        <div className="text-lg font-semibold">Em curso</div>
-
-                        {openRequests.length === 0 ? (
-                          <div className="text-muted-foreground text-sm">
-                            Não há pedidos em curso.
-                          </div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="text-left">
-                                  <th className="py-2">Criado</th>
-                                  <th>Tipo</th>
-                                  <th>Assunto</th>
-                                  <th>Agendado</th>
-                                  <th className="text-right">Ações</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {openRequests.map((r) => (
-                                  <tr key={r.id} className="border-t">
-                                    <td className="py-2">
-                                      {new Date(r.createdAt).toLocaleDateString("pt-PT")}
-                                    </td>
-                                    <td>{r.type}</td>
-                                    <td>{r.subject}</td>
-                                    <td>{r.scheduledDate || "—"}</td>
-                                    <td className="text-right">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleCloseOneRequest(r.id)}
-                                      >
-                                        Fechar
-                                      </Button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-
-                      <Separator />
-
-                      {/* Histórico */}
-                      <div className="space-y-3">
-                        <div className="text-lg font-semibold">Histórico</div>
-
-                        {closedRequests.length === 0 ? (
-                          <div className="text-muted-foreground text-sm">
-                            Ainda não existem pedidos fechados.
-                          </div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="text-left">
-                                  <th className="py-2">Criado</th>
-                                  <th>Tipo</th>
-                                  <th>Assunto</th>
-                                  <th>Agendado</th>
-                                  <th>Fechado</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {closedRequests.map((r) => (
-                                  <tr key={r.id} className="border-t">
-                                    <td className="py-2">
-                                      {new Date(r.createdAt).toLocaleDateString("pt-PT")}
-                                    </td>
-                                    <td>{r.type}</td>
-                                    <td>{r.subject}</td>
-                                    <td>{r.scheduledDate || "—"}</td>
-                                    <td>
-                                      {r.closedAt
-                                        ? new Date(r.closedAt).toLocaleDateString("pt-PT")
-                                        : "—"}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  ) : tab.value === "documents" ? (
-                    <>
-                      {/* Campos da documentação */}
-                      {renderSectionFields(tab.sectionKey)}
-
-                      <Separator />
-
-                      {/* ===================== DOCUMENTOS ANEXOS ===================== */}
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="text-lg font-semibold">Documentos anexos</div>
-
-                          <Button variant="outline" onClick={() => setSubmitDocOpen(true)}>
-                            {effectiveRole === "gestor"
-                              ? "Anexar documento"
-                              : "Submeter documento"}
+                          <Button onClick={handleAddContactRequest} className="gap-2">
+                            <Save className="h-4 w-4" />
+                            Guardar Pedido
                           </Button>
                         </div>
 
-                        {safeArray<any>(formData.documents.attachments).length === 0 ? (
-                          <div className="text-sm text-muted-foreground">
-                            Sem documentos anexos.
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {safeArray<any>(formData.documents.attachments).map((d) => (
-                              <div
-                                key={d.id}
-                                className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className="font-medium">{d.label}</div>
-                                  <StatusBadge status={d.status} />
-                                </div>
+                        <Separator />
 
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => openDoc(d.label, d.fileUrl)}
-                                  >
-                                    Ver
-                                  </Button>
+                        {/* Em curso */}
+                        <div className="space-y-3">
+                          <div className="text-lg font-semibold">Em curso</div>
 
-                                  {session?.role === "gestor" && d.status === "pendente" && (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        onClick={() => {
-                                          approveAttachment(
-                                            formData.id,
-                                            d.id,
-                                            session.managerId
-                                          );
+                          {openRequests.length === 0 ? (
+                            <div className="text-muted-foreground text-sm">
+                              Não há pedidos em curso.
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-left">
+                                    <th className="py-2">Criado</th>
+                                    <th>Tipo</th>
+                                    <th>Assunto</th>
+                                    <th>Agendado</th>
+                                    <th className="text-right">Ações</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {openRequests.map((r) => (
+                                    <tr key={r.id} className="border-t">
+                                      <td className="py-2">
+                                        {new Date(r.createdAt).toLocaleDateString("pt-PT")}
+                                      </td>
+                                      <td>{r.type}</td>
+                                      <td>{r.subject}</td>
+                                      <td>{r.scheduledDate || "—"}</td>
+                                      <td className="text-right">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleCloseOneRequest(r.id)}
+                                        >
+                                          Fechar
+                                        </Button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
 
-                                          setFormData((prev) =>
-                                            prev
-                                              ? {
-                                                ...prev,
-                                                documents: {
-                                                  ...prev.documents,
-                                                  attachments:
-                                                    safeArray<any>(
-                                                      prev.documents.attachments
-                                                    ).map((x) =>
-                                                      x.id === d.id
-                                                        ? { ...x, status: "aprovado" }
-                                                        : x
-                                                    ),
-                                                },
-                                              }
-                                              : prev
-                                          );
-                                        }}
-                                      >
-                                        Aprovar
-                                      </Button>
+                        <Separator />
 
-                                      <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={() => {
-                                          setRejectDocId(d.id);
-                                          setRejectNote("");
-                                          setRejectOpen(true);
-                                        }}
-                                      >
-                                        Rejeitar
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
+                        {/* Histórico */}
+                        <div className="space-y-3">
+                          <div className="text-lg font-semibold">Histórico</div>
 
-                                {d.note && (
-                                  <div className="text-sm text-muted-foreground">
-                                    Motivo: {d.note}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
+                          {closedRequests.length === 0 ? (
+                            <div className="text-muted-foreground text-sm">
+                              Ainda não existem pedidos fechados.
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-left">
+                                    <th className="py-2">Criado</th>
+                                    <th>Tipo</th>
+                                    <th>Assunto</th>
+                                    <th>Agendado</th>
+                                    <th>Fechado</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {closedRequests.map((r) => (
+                                    <tr key={r.id} className="border-t">
+                                      <td className="py-2">
+                                        {new Date(r.createdAt).toLocaleDateString("pt-PT")}
+                                      </td>
+                                      <td>{r.type}</td>
+                                      <td>{r.subject}</td>
+                                      <td>{r.scheduledDate || "—"}</td>
+                                      <td>
+                                        {r.closedAt
+                                          ? new Date(r.closedAt).toLocaleDateString("pt-PT")
+                                          : "—"}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ✅ Notas internas do gestor (CONTACT) */}
+                        {effectiveRole === "gestor" && (
+                          <InternalNotesBlock
+                            tabKey="contact"
+                            formData={formData}
+                            setFormData={setFormData}
+                          />
                         )}
-                      </div>
+                      </>
+                    ) : tab.value === "documents" ? (
+                      <>
+                        {/* Campos da documentação */}
+                        {renderSectionFields(tab.sectionKey)}
 
-                      {/* Viewer */}
-                      {docViewerUrl && (
-                        <DocumentViewer
-                          open={docViewerOpen}
-                          onOpenChange={setDocViewerOpen}
-                          title={docViewerTitle}
-                          url={docViewerUrl}
-                        />
-                      )}
-                    </>
-                  ) : (
-                    renderSectionFields(tab.sectionKey)
-                  )}
-                </CardContent>
+                        {effectiveRole === "gestor" && (
+                          <>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <div>
+                                  <Label className="text-sm font-medium text-foreground">
+                                    Paradeiro
+                                  </Label>
+                                </div>
 
-              </Card>
-            </TabsContent>
-          ))}
+                                <div className="flex items-center gap-2 h-10">
+                                  <Switch
+                                    checked={!!formData.documents.paradeiroKnown}
+                                    onCheckedChange={(v) =>
+                                      setFormData((prev) =>
+                                        prev
+                                          ? {
+                                            ...prev,
+                                            documents: {
+                                              ...prev.documents,
+                                              paradeiroKnown: v,
+                                            },
+                                          }
+                                          : prev
+                                      )
+                                    }
+                                  />
+                                  <span className="text-sm text-muted-foreground">
+                                    {formData.documents.paradeiroKnown
+                                      ? "Conhecido"
+                                      : "Desconhecido"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <InternalNotesBlock
+                              tabKey="documents"
+                              formData={formData}
+                              setFormData={setFormData}
+                            />
+                          </>
+                        )}
+
+                        <Separator />
+
+                        {/* DOCUMENTOS ANEXOS */}
+                        {/* ... mantém o teu bloco de anexos aqui como já está ... */}
+
+                        {docViewerUrl && (
+                          <DocumentViewer
+                            open={docViewerOpen}
+                            onOpenChange={setDocViewerOpen}
+                            title={docViewerTitle}
+                            url={docViewerUrl}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {renderSectionFields(tab.sectionKey)}
+
+                        {effectiveRole === "gestor" && (
+                          <InternalNotesBlock
+                            tabKey={tab.value}
+                            formData={formData}
+                            setFormData={setFormData}
+                          />
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            ))}
+
         </Tabs>
       </div>
     </Layout>

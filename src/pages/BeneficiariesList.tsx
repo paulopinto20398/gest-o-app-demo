@@ -24,11 +24,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useSearchParams } from "react-router-dom";
 
 
 const BeneficiariesList = () => {
   const { beneficiaries } = useBeneficiaries();
   const { session } = useAuth();
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get("filter"); // ex: "paradeiro"
+  const pageTitle =
+    filter === "paradeiro"
+      ? "Beneficiários com paradeiro desconhecido"
+      : "Beneficiários";
 
   const managerId = session?.role === "gestor" ? session.managerId : "";
 
@@ -41,8 +48,13 @@ const BeneficiariesList = () => {
       : [];
 
 
+
   // Filtro de busca (opcional)
   const filteredBeneficiaries = managedBeneficiaries.filter((beneficiary) => {
+    // ✅ filtro vindo do dashboard
+    const matchesWhereabouts =
+      filter !== "paradeiro" || beneficiary.documents?.paradeiroKnown === false;
+
     const matchesSearchTerm = beneficiary.personalInfo.name
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
@@ -50,15 +62,16 @@ const BeneficiariesList = () => {
     const matchesStatus =
       statusFilter === "all" || beneficiary.status === statusFilter;
 
-    return matchesSearchTerm && matchesStatus;
+    return matchesWhereabouts && matchesSearchTerm && matchesStatus;
   });
+
 
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Beneficiários</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
             <p className="text-muted-foreground">
               Gerir processos individuais e listagem de pessoas.
             </p>
@@ -165,3 +178,4 @@ const BeneficiariesList = () => {
 };
 
 export default BeneficiariesList;
+
